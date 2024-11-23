@@ -9,7 +9,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline, Pipeline
 from typing import Tuple, List
 
 DATASET = "rajpurkar/squad"
-LLM = "google/gemma-2-2b-it"
+LLM = "Qwen/Qwen2.5-1.5B-Instruct"
 EMBEDDING_MODEL = "thenlper/gte-base"
 FAISS_PATH = "faiss_store"
 
