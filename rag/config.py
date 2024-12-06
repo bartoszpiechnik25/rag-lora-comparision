@@ -12,6 +12,7 @@ DATASET = "rajpurkar/squad"
 LLM = "Qwen/Qwen2.5-1.5B-Instruct"
 EMBEDDING_MODEL = "thenlper/gte-base"
 FAISS_PATH = "faiss_store"
+DEVICE = 'mps' if torch.backends.mps.is_available() else 'cpu'
 
 def load_dataset(split: str, num_tokens: int) -> datasets.Dataset:
     ds = datasets.load_dataset(DATASET, split=split)
@@ -19,15 +20,15 @@ def load_dataset(split: str, num_tokens: int) -> datasets.Dataset:
     ds = ds.filter(lambda sample: len(tokenizer.encode(sample['context']) < num_tokens))
     return ds
 
-def create_vector_db(dataset: datasets.Dataset=None) -> Tuple[FAISS, HuggingFaceEmbeddings]:
+def create_vector_db(dataset: datasets.Dataset=None, path: str = FAISS_PATH) -> Tuple[FAISS, HuggingFaceEmbeddings]:
     embedding_model = HuggingFaceEmbeddings(
         model_name=EMBEDDING_MODEL,
         show_progress=True,
         multi_process=True,
-        encode_kwargs={"normalize_embeddings": True} 
+        encode_kwargs={"normalize_embeddings": True},
     )
-    if os.path.isdir(FAISS_PATH):
-        return FAISS.load_local(FAISS_PATH, embedding_model, allow_dangerous_deserialization=True), embedding_model
+    if os.path.isdir(path):
+        return FAISS.load_local(path, embedding_model, allow_dangerous_deserialization=True), embedding_model
 
     if dataset is None:
         raise ValueError("Could not find local vector db and the dataset was not provided!")
@@ -47,8 +48,9 @@ def get_llm() -> Tuple[AutoTokenizer, Pipeline]:
     model = AutoModelForCausalLM.from_pretrained(
         LLM,
         torch_dtype=torch.bfloat16,
-        device_map='auto',
+        device_map=DEVICE,
     )
+    model.eval()
     llm_pipeline = pipeline(
         model=model,
         tokenizer=tokenizer,
@@ -92,14 +94,12 @@ def prepare_docs(documents: List[LangchainDocument], tokenizer: AutoTokenizer) -
 
 
 def create_prompt(question: str, vector_db: FAISS, template: str, tokenizer: AutoTokenizer) -> Tuple[str, List[LangchainDocument]]:
-    print("Looking for similar topics...")
     simmilar_topics = vector_db.similarity_search(question, k=5)
     context_documents = prepare_docs(simmilar_topics, tokenizer)
     return template.format(question=question, context=context_documents), context_documents
 
 def run(pipeline: Pipeline, question: str, vector_db: FAISS, tokenizer: AutoTokenizer, template: str):
     prompt, relevant_docs = create_prompt(question, vector_db, template, tokenizer)
-    print("Generating response...")
     llm_response = pipeline(prompt)[0]['generated_text']
     return llm_response, relevant_docs
    

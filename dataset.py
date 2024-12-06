@@ -14,7 +14,7 @@ LLM = "Qwen/Qwen2.5-1.5B-Instruct"
 MAX_PROMPT_LEN = 460
 
 
-def prepare_dataset_for_training() -> Tuple[datasets.Dataset, datasets.Dataset]:
+def prepare_dataset_for_training(tokenize: bool = True) -> Tuple[datasets.Dataset, datasets.Dataset]:
     dataset = datasets.load_dataset(DATASET, split='train')
     tokenizer = AutoTokenizer.from_pretrained(LLM)
     dataset = datasets.Dataset.from_pandas(
@@ -39,9 +39,12 @@ def prepare_dataset_for_training() -> Tuple[datasets.Dataset, datasets.Dataset]:
         model_inputs['input_ids'] = model_inputs['input_ids'].squeeze(0)
         return model_inputs
 
-    dataset = dataset.map(tokenize_function, num_proc=12, remove_columns=dataset.column_names)
-    dataset.set_format(type="torch", columns=["input_ids", "labels"])
-    dataset = dataset.train_test_split(0.2, shuffle=True, seed=2137)
+    if tokenize:
+        dataset = dataset.map(tokenize_function, num_proc=12, remove_columns=dataset.column_names)
+        dataset.set_format(type="torch", columns=["input_ids", "labels"])
+        dataset = dataset.train_test_split(0.2, shuffle=True, seed=2137)
+
+        return dataset['train'], dataset['test']
 
     return dataset['train'], dataset['test']
 
